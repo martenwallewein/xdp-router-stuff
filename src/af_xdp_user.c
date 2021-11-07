@@ -1,71 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
-#include <assert.h>
-#include <errno.h>
-#include <getopt.h>
-#include <locale.h>
-#include <netinet/ip.h>
-#include <poll.h>
-#include <pthread.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <unistd.h>
-
-#include <sys/resource.h>
-
-#include <bpf/bpf.h>
-#include <bpf/xsk.h>
-
-#include <arpa/inet.h>
-#include <net/if.h>
-#include <linux/if_link.h>
-#include <linux/if_ether.h>
-#include <linux/ipv6.h>
-#include <linux/icmpv6.h>
-
-
-#include "../common/common_params.h"
-#include "../common/common_user_bpf_xdp.h"
-#include "../common/common_libbpf.h"
-
-
-#define NUM_FRAMES         4096
-#define FRAME_SIZE         XSK_UMEM__DEFAULT_FRAME_SIZE
-#define RX_BATCH_SIZE      64
-#define INVALID_UMEM_FRAME UINT64_MAX
-
-struct xsk_umem_info {
-	struct xsk_ring_prod fq;
-	struct xsk_ring_cons cq;
-	struct xsk_umem *umem;
-	void *buffer;
-};
-
-struct stats_record {
-	uint64_t timestamp;
-	uint64_t rx_packets;
-	uint64_t rx_bytes;
-	uint64_t tx_packets;
-	uint64_t tx_bytes;
-};
-
-struct xsk_socket_info {
-	struct xsk_ring_cons rx;
-	struct xsk_ring_prod tx;
-	struct xsk_umem_info *umem;
-	struct xsk_socket *xsk;
-
-	uint64_t umem_frame_addr[NUM_FRAMES];
-	uint32_t umem_frame_free;
-
-	uint32_t outstanding_tx;
-
-	struct stats_record stats;
-	struct stats_record prev_stats;
-};
+#include "af_xdp_user.h"
 
 static inline __u32 xsk_ring_prod__free(struct xsk_ring_prod *r)
 {
@@ -498,6 +433,7 @@ static void *stats_poll(void *arg)
 		sleep(interval);
 		xsk->stats.timestamp = gettime();
 		stats_print(&xsk->stats, &previous_stats);
+		fflush(stdout);
 		previous_stats = xsk->stats;
 	}
 	return NULL;
@@ -509,8 +445,10 @@ static void exit_application(int signal)
 	global_exit = true;
 }
 
-int main(int argc, char **argv)
+
+int main_impl(int argc, char **argv)
 {
+	printf("Test");
 	int ret;
 	int xsks_map_fd;
 	void *packet_buffer;
@@ -600,7 +538,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Start thread to do statistics display */
-	if (verbose) {
+	if (1/*verbose*/) {
 		ret = pthread_create(&stats_poll_thread, NULL, stats_poll,
 				     xsk_socket);
 		if (ret) {
@@ -619,4 +557,9 @@ int main(int argc, char **argv)
 	xdp_link_detach(cfg.ifindex, cfg.xdp_flags, 0);
 
 	return EXIT_OK;
+}
+
+int main_c(int argc, char **argv)
+{
+	return main_impl(argc, argv);
 }
