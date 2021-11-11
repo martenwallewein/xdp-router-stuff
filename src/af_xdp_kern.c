@@ -5,35 +5,8 @@
 #include <netinet/udp.h>
 #include <net/ethernet.h>
 #include <bpf/bpf_helpers.h>
+#include "scion.h"
 
-#if BYTE_ORDER == BIG_ENDIAN
-
-#define HTONS(n) (n)
-#define NTOHS(n) (n)
-#define HTONL(n) (n)
-#define NTOHL(n) (n)
-
-#else
-
-#define HTONS(n) (((((unsigned short)(n) & 0xFF)) << 8) | (((unsigned short)(n) & 0xFF00) >> 8))
-#define NTOHS(n) (((((unsigned short)(n) & 0xFF)) << 8) | (((unsigned short)(n) & 0xFF00) >> 8))
-
-#define HTONL(n) (((((unsigned long)(n) & 0xFF)) << 24) | \
-                  ((((unsigned long)(n) & 0xFF00)) << 8) | \
-                  ((((unsigned long)(n) & 0xFF0000)) >> 8) | \
-                  ((((unsigned long)(n) & 0xFF000000)) >> 24))
-
-#define NTOHL(n) (((((unsigned long)(n) & 0xFF)) << 24) | \
-                  ((((unsigned long)(n) & 0xFF00)) << 8) | \
-                  ((((unsigned long)(n) & 0xFF0000)) >> 8) | \
-                  ((((unsigned long)(n) & 0xFF000000)) >> 24))
-#endif
-
-#define _htons(n) HTONS(n)
-#define _ntohs(n) NTOHS(n)
-
-#define _htonl(n) HTONL(n)
-#define _ntohl(n) NTOHL(n)
 
 #define TARGET_PORT 31041
 
@@ -43,6 +16,15 @@ struct bpf_map_def SEC("maps") xsks_map = {
 	.value_size = sizeof(int),
 	.max_entries = 64,  /* Assume netdev has no more than 64 queues */
 };
+
+struct bpf_map_def SEC("maps") listen_ports = {
+        .type = BPF_MAP_TYPE_ARRAY,
+        .key_size = sizeof(int),
+        .value_size = sizeof(int),
+        .max_entries = 64,
+        .map_flags = 0,
+};
+
 
 struct bpf_map_def SEC("maps") xdp_stats_map = {
 	.type        = BPF_MAP_TYPE_PERCPU_ARRAY,
@@ -66,7 +48,8 @@ int xdp_sock_prog(struct xdp_md *ctx)
             // Ensure UDP
             if (ip->protocol == IPPROTO_UDP) {
                 struct udphdr *udp = (void*)ip + sizeof(*ip);
-                if ((void*)udp + sizeof(*udp) <= data_end &&  udp->dest == _htons(TARGET_PORT)) {
+                int *port_found = bpf_map_lookup_elem(&listen_ports, &udp->dest);
+                if ( port_found && *port_found == 1 && (void*)udp + sizeof(*udp) <= data_end &&  udp->dest == _htons(TARGET_PORT)) {
                     // We got it, check for queue and socket
                     int index = ctx->rx_queue_index;
                     // This map is unused, so we can ignore it for now
@@ -77,11 +60,17 @@ int xdp_sock_prog(struct xdp_md *ctx)
                         if ((*pkt_count)++ & 1)
                             return XDP_PASS;
                     }*/
+                    // Ensure SCION and SCION nextheader udp
+                    const struct scion_hdr *scion_h = (const struct scion_hdr *)(udp + 1);
+                    // We forward only nextheader == UDP && pathType SCION
+                    if(scion_h->next_hdr == IPPROTO_UDP && (scion_h->path_type == (__u8)_htons(1))) {
+                        /* A set entry here means that the correspnding queue_id
+                        * has an active AF_XDP socket bound to it. */
+                        if (bpf_map_lookup_elem(&xsks_map, &index))
+                            return bpf_redirect_map(&xsks_map, index, 0);
+                    }
 
-                    /* A set entry here means that the correspnding queue_id
-                    * has an active AF_XDP socket bound to it. */
-                    if (bpf_map_lookup_elem(&xsks_map, &index))
-                        return bpf_redirect_map(&xsks_map, index, 0);
+                    
                 }
             }
         }
