@@ -124,8 +124,9 @@ static inline struct scion_forward_result* handle_forward(void* data, struct sci
     // Since we want to add other fields for easier processing here
     __u32* path_meta_start = (__u32*)(scion_v4_h + 1);
     struct scion_path_meta_hdr *scion_path_meta = path_meta_hdr_from_raw(be32toh(*path_meta_start));
+    #ifdef DEBUG
     print_packet_info(scion_h, scion_v4_h, scion_path_meta);
-    
+    #endif
 
     // Get current INF/HF
     struct scion_info_field* cur_inf_field = get_inf_field(((void*)path_meta_start), scion_path_meta->cur_inf);
@@ -196,7 +197,7 @@ static inline struct scion_forward_result* handle_forward(void* data, struct sci
     // Write path meta back to packet
     __u32 raw = 0;
     path_meta_hdr_to_raw(scion_path_meta, &raw);
-    *path_meta_start = raw;
+    *path_meta_start = htobe32(raw);
 
     free(scion_path_meta);
     free(full_mac);

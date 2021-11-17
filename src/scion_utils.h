@@ -7,10 +7,10 @@
 
 // Writes the pathmeta header into the 32bit buffer, ignoring extra fields like num_hf etc
 static inline void path_meta_hdr_to_raw(struct scion_path_meta_hdr* path_meta_header, __u32* raw) {
-    *raw = htobe32(((__u32)path_meta_header->cur_inf) <<30 | ((__u32)(path_meta_header->cur_hf & 0x3F))<<24);
-    *raw |= htobe32(((__u32)path_meta_header->seg_0_len&0x3F) << 12);
-	*raw |= htobe32(((__u32)path_meta_header->seg_1_len&0x3F) << 6);
-    *raw |= htobe32(((__u32)path_meta_header->seg_2_len&0x3F));
+    *raw = ((__u32)path_meta_header->cur_inf) <<30 | ((__u32)(path_meta_header->cur_hf & 0x3F))<<24;
+    *raw |= ((__u32)path_meta_header->seg_0_len&0x3F) << 12;
+	*raw |= ((__u32)path_meta_header->seg_1_len&0x3F) << 6;
+    *raw |= ((__u32)path_meta_header->seg_2_len&0x3F);
 }
 
 // Reads the pathmeta header from a raw representation in the packet
