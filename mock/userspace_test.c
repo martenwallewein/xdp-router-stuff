@@ -43,14 +43,14 @@ int main() {
     int len, n;
    
     len = sizeof(cliaddr);  //len is value/resuslt
+    struct scion_br_info br_info;
    while(1) {
         n = recvfrom(sockfd, (char *)buffer, MAXLINE, 
                 MSG_WAITALL, ( struct sockaddr *) &cliaddr,
                 &len);
         // buffer[n] = '\0';
         // printf("Client : %d\n", n);
-        struct scion_br_info* br_info = (struct scion_br_info*)malloc(sizeof(struct scion_br_info));
-        int ret = handle_forward(buffer, br_info);
+        int ret = handle_forward(buffer, &br_info);
    }
    
 
