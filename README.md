@@ -1,8 +1,11 @@
-# XDP-Router
-AF_XDP implementation of the forwarding data path of SCION Border routers
+# XDP SCION Router - Bunch of testing stuff
 
-Assumptions:
-- We only implement the actual forwarding of SCION L4/UDP packets, all other packets are kept untouched
+## Build and run the mock (userspace) implementation
+```
+cd mock
+gcc userspace_test.c
+./a.out
+```
 
-Limitations:
-- Will not work on Single
+Listens on :8080 for incoming UDP packets and thinks that all of them are SCION packets
+Just for testing purposes, may be easier to test compared to eBPF.
