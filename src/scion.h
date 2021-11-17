@@ -5,6 +5,7 @@
 #include <netinet/ip.h>
 #include <netinet/udp.h>
 #include <net/ethernet.h>
+#include <endian.h>
 
 #if BYTE_ORDER == BIG_ENDIAN
 
@@ -24,6 +25,17 @@
                   ((((unsigned long)(n) & 0xFF000000)) >> 24))
 
 #define NTOHL(n) (((((unsigned long)(n) & 0xFF)) << 24) | \
+                  ((((unsigned long)(n) & 0xFF00)) << 8) | \
+                  ((((unsigned long)(n) & 0xFF0000)) >> 8) | \
+                  ((((unsigned long)(n) & 0xFF000000)) >> 24))
+
+#define HTONLL(n) (((((unsigned long long)(n) & 0xFF)) << 24) | \
+                  ((((unsigned long long)(n) & 0xFF00)) << 8) | \
+                  ((((unsigned long long)(n) & 0xFF0000)) >> 8) | \
+                  ((((unsigned long long)(n) & 0xFF000000)) >> 24)) \
+
+
+#define NTOHLL(n) (((((unsigned long)(n) & 0xFF)) << 24) | \
                   ((((unsigned long)(n) & 0xFF00)) << 8) | \
                   ((((unsigned long)(n) & 0xFF0000)) >> 8) | \
                   ((((unsigned long)(n) & 0xFF000000)) >> 24))
@@ -76,24 +88,41 @@ struct scion_path_meta_hdr {
     __u8 seg_0_len: 6;
     __u8 seg_1_len: 6;
     __u8 seg_2_len: 6;
+
+    // additional fields
+    __u8 num_hf;
+    __u8 num_inf;
 };
 
 struct scion_info_field {
     __u8 rsv: 6;
     __u8 peering: 1; // Peering flag. If set to true, then the forwarding path is built as a peering path, which requires special processing on the dataplane.
     __u8 constr_dir: 1; // Construction direction flag. If set to true then the hop fields are arranged in the direction they have been constructed during beaconing.
-    __u8 rsv2;
-    __u16 seg_id;
-    __u32 timestamp;
+    __u8 rsv2: 8;
+    __u16 seg_id: 16;
+    __u32 timestamp: 32;
 };
 
 struct scion_hop_field {
-    __u8 rsv: 6;
-    __u8 cons_ingr_alert: 1;
-    __u8 cons_egr_alert: 1;
-    __u16 cons_ingr_interface;
-    __u16 cons_egr_interface;
+    __u8 rsv: 8;
+    //__u8 cons_ingr_alert: 1;
+    //__u8 cons_egr_alert: 1;
+    __u16 cons_ingr_interface: 16;
+    __u16 cons_egr_interface: 16;
     __u64 mac: 48;
+};
+
+
+struct scion_br_info {
+    __u64* mac_key;
+    __u16 local_isd;
+    __u64 local_ia: 48;
+    __u16* link_ingr_ids;
+    __u16* link_egr_ids;
+    __u32* link_ingr_ips;
+    __u32* link_egr_ips;
+    __u32 num_links;
+
 };
 
 #define MIN_PACKET_SIZE 62 // 14 (eth) + 20 (IP) + 8 (UDP) + 12 (SCION) + 8 (UDP)

@@ -49,7 +49,8 @@ int main() {
                 &len);
         // buffer[n] = '\0';
         // printf("Client : %d\n", n);
-        int ret = handle_forward(buffer);
+        struct scion_br_info* br_info = (struct scion_br_info*)malloc(sizeof(struct scion_br_info));
+        int ret = handle_forward(buffer, br_info);
    }
    
 
