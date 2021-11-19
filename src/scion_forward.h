@@ -183,7 +183,9 @@ static inline struct scion_forward_result* handle_forward(void* data, struct sci
     //    HF: MAC: 9205584056140365824, Ingress: 286, Egress: 247 <- what is this
     //    HF: MAC: 12947491872978829312, Ingress: 1, Egress: 0
     // Funny side note: Ingress of HF #3 is not always the same for the same packet sent multiple times...
-    __u16 egr_int_ip = egr_intf_ip_by_id(br_info, cur_hop_field->cons_egr_interface);
+    // TODO: Combine these two
+    __u32 egr_int_ip = egr_intf_ip_by_id(br_info, cur_hop_field->cons_egr_interface);
+    __u16 egr_int_port = egr_intf_port_by_id(br_info, cur_hop_field->cons_egr_interface);
 
     // We update the segId before updating HF 
     ret = update_cons_dir_egress_seg_id(cur_inf_field, cur_hop_field);
@@ -191,7 +193,7 @@ static inline struct scion_forward_result* handle_forward(void* data, struct sci
     // INF field is not changed here anymore, we did this in xover
     update_cur_inf_hf(scion_path_meta);
     result->state = SCION_FORWARD_SUCCESS;
-    result->dst_port = SCION_ENDHOST_PORT;
+    result->dst_port = egr_int_port;
     result->dst_addr_v4 = egr_int_ip;
 
     // Write path meta back to packet

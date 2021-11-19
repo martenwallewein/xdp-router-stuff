@@ -80,6 +80,8 @@ struct scion_br_info {
     __u16* link_egr_ids;
     __u32* link_ingr_ips;
     __u32* link_egr_ips;
+    __u32* link_egr_ports;
+    __u32* link_ingr_ports;
     __u32 num_links;
 
 };

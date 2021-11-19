@@ -94,4 +94,16 @@ static inline __u32 egr_intf_ip_by_id(struct scion_br_info* br_info, __u16 egr_i
     return 0;
 }
 
+// Fetches the egress interface ip by the given ergress_id
+static inline __u16 egr_intf_port_by_id(struct scion_br_info* br_info, __u16 egr_int_id) {
+    __u16 i = 0;
+    for (i = 0; i < br_info->num_links; i++) {
+        if (*(br_info->link_egr_ids + i) == egr_int_id) {
+            return *(br_info->link_egr_ports + i);
+        }
+    }
+
+    return 0;
+}
+
 #endif // SCION_UTILS_H 
