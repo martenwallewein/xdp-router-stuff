@@ -33,7 +33,8 @@ static inline void update_cur_inf_hf(struct scion_path_meta_hdr *scion_path_meta
 // https://scion.docs.anapaya.net/en/latest/protocols/scion-header.html#hop-field-mac-computation
 // Should look like this: inf.SegID = inf.SegID ^ binary.BigEndian.Uint16(hfMac[:2])
 static inline void update_seg_id(struct scion_info_field* cur_inf_field, __u64 mac) {
-    cur_inf_field->seg_id = htobe16(be16toh(cur_inf_field->seg_id) ^ ((__u16)(be64toh(mac) >> 32))); // && 0xFFFF
+    __u16* fmac = (__u16*)(&mac);
+    cur_inf_field->seg_id = htobe16(be16toh(cur_inf_field->seg_id) ^ (be16toh(*fmac))); // && 0xFFFF
 }
  
 // Checks if we are ingress router and need to update hop/inf fields
@@ -46,6 +47,7 @@ static inline int update_non_cons_dir_ingress_seg_id(
 	// TODO(lukedirtwalker): For packets destined to peer links this shouldn't
 	// be updated.
     if (cur_inf_field->constr_dir == 0 && be16toh(cur_hop_field->cons_ingr_interface) != 0) {
+        printf("update_non_cons_dir_ingress_seg_id\n");
         // update segId in info filed
         update_seg_id(cur_inf_field, cur_hop_field->mac);
         return 1;
@@ -65,7 +67,9 @@ static inline int update_cons_dir_egress_seg_id(
 	// be updated.
     if (cur_inf_field->constr_dir != 0) {
         // update segId in info filed
-        update_seg_id(cur_inf_field, cur_hop_field->mac);
+            __u8* steps = (__u8*)(&cur_hop_field->mac);
+        __u64* mac = (__u64*)(steps - 2); // We are 2 byte off, not sure why...
+        update_seg_id(cur_inf_field, *mac);
         return 1;
 
     }
@@ -131,6 +135,7 @@ static inline struct scion_forward_result* handle_forward(void* data, struct sci
     // Get current INF/HF
     struct scion_info_field* cur_inf_field = get_inf_field(((void*)path_meta_start), scion_path_meta->cur_inf);
     struct scion_hop_field* cur_hop_field = get_hop_field(((void*)path_meta_start), scion_path_meta->num_inf, scion_path_meta->cur_hf);
+    print_hf(cur_hop_field);
     int ret = 0;
 
     // Check if ingress and consDir
@@ -140,13 +145,14 @@ static inline struct scion_forward_result* handle_forward(void* data, struct sci
     ret = verify_current_mac(cur_inf_field, cur_hop_field, br_info->mac_key, full_mac); // Handle result here...
 
     // TODO: Handle egress/ingress alerts!!
+    printf("DEBUG: dst_isd = %u, localAS: %lu\n\n",scion_v4_h->dst_isd, be64toh(scion_v4_h->dst_ia));
 
     // Inbound: pkts destined to the local IA.
     // TODO: We need to make sure that its not a svc address...
     if (br_info->local_isd == scion_v4_h->dst_isd && br_info->local_ia == be64toh(scion_v4_h->dst_ia)) {
         result->state = SCION_FORWARD_SUCCESS;
         result->dst_port = SCION_ENDHOST_PORT;
-        result->dst_addr_v4 = scion_v4_h->dst_host_addr;
+        result->dst_addr_v4 = be32toh(scion_v4_h->dst_host_addr);
         return result;
     }
 

@@ -33,6 +33,17 @@ static inline void print_inf(struct scion_info_field* cur_inf_field) {
 
 static inline void print_hf(struct scion_hop_field* cur_hop_field) {
     printf("HF: MAC: %lu, Ingress: %u, Egress: %u\n", be64toh(cur_hop_field->mac), be16toh(cur_hop_field->cons_ingr_interface), be16toh(cur_hop_field->cons_egr_interface)); 
+    __u8 parts[6];
+    __u8* steps = (__u8*)(&cur_hop_field->mac);
+    __u64* mac = (__u64*)(steps - 2); // We are 2 byte off, not sure why...
+    parts[0] = ((*mac) >> 0) & 0xFF;
+    parts[1] = ((*mac) >> 8) & 0xFF;
+    parts[2] = ((*mac) >> 16) & 0xFF;
+    parts[3] = ((*mac) >> 24) & 0xFF;
+    parts[4] = ((*mac) >> 32) & 0xFF;
+    parts[5] = ((*mac) >> 40) & 0xFF;
+    // __u8* macParts = (__u8*)(cur_hop_field->mac);
+    printf("MAC in detail: %u, %u, %u, %u, %u, %u\n", parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]);
 }
 
 

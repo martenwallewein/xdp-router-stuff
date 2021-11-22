@@ -49,7 +49,8 @@ static inline struct scion_info_field* get_inf_field(void* data, __u8 index) {
 // Gets the hop field at the given index
 static inline struct scion_hop_field* get_hop_field(void* data, __u8 num_inf, __u8 hf_index) {
     // offset: 4𝐵+8𝐵⋅NumINF+12𝐵⋅CurrHF
-    void* new_off = (void*)(((char*)data) + 4 + 8 * num_inf + 12 * hf_index);
+    void* new_off = (char*)(((__u8*)data) + (4 + 8 * num_inf + 12 * hf_index)); // -2
+    printf("calculating from %p tp %p with num_inf %u and hf_index %u\n", data, new_off, num_inf, hf_index);
     return (struct scion_hop_field*)(new_off);
 }
 
