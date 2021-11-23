@@ -7,6 +7,7 @@
 #include <net/ethernet.h>
 #include <endian.h>
 
+
 // See SCION header specification: 
 struct scion_hdr {
     __u32 info; // version, qos, flow_id, add later if requried
@@ -68,14 +69,14 @@ struct scion_hop_field {
     //__u8 cons_egr_alert: 1;
     __u16 cons_ingr_interface: 16;
     __u16 cons_egr_interface: 16;
-    __u64 mac: 48;
+    __u64 mac; // :48 TODO: This is not aligned correctly, plase do not use sizeof(scion_hop_field) to calculate further offsets...
 };
 
 
 struct scion_br_info {
     __u64* mac_key;
     __u16 local_isd;
-    __u64 local_ia: 48;
+    __u64 local_ia;
     __u16* link_ingr_ids;
     __u16* link_egr_ids;
     __u32* link_ingr_ips;

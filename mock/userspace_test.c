@@ -7,9 +7,11 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include "../src/scion_forward.h"
-  
-#define PORT     8080
-#define MAXLINE 1300
+
+// Enable debug logging for SCION packets
+#define DEBUG 1
+#define PORT      50011// 30001
+#define MAXLINE 1500
 
 __u32 to_u32_ip(__u8 block1, __u8 block2, __u8 block3, __u8 block4) {
     unsigned char bytes[4];
@@ -63,15 +65,15 @@ int main() {
     *(br_info.link_ingr_ids) = 1;
     *(br_info.link_ingr_ips) = to_u32_ip(192, 168, 178, 67);
     *(br_info.link_egr_ips) = to_u32_ip(192, 168, 178, 20);
-    *(br_info.link_egr_ports) = 50011;
-
+    *(br_info.link_egr_ports) = 50011;// 8080;
+    br_info.local_isd = 4864;
+    br_info.local_ia = 18422537230224523264u;
 
    while(1) {
         n = recvfrom(sockfd, (char *)buffer, MAXLINE, 
                 MSG_WAITALL, ( struct sockaddr *) &cliaddr,
                 &len);
-        // buffer[n] = '\0';
-        // printf("Client : %d\n", n);
+        printf("Received %u bytes\n", n);
         struct scion_forward_result* ret = handle_forward(buffer, &br_info);
         if (ret->state == SCION_FORWARD_SUCCESS) {
             struct sockaddr_in cliaddr;
@@ -82,11 +84,14 @@ int main() {
             char* targetIp;
             print_ip(&targetIp, htonl(ret->dst_addr_v4));
             printf("Sending packet to %s:%u\n", targetIp, ret->dst_port);
-            n = sendto(sockfd, (const char *)buffer, sizeof(buffer),  MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
-            printf("Sent %d bytes\n", n);
+            n = sendto(sockfd, (const char *)buffer, n,  MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
             if (n < 0) {
                 printf("Err sending packet\n");
+                continue;
             }
+            printf("Sent %d bytes\n", n);
+            
+            
         } else {
             printf("Packet not forwarded %u\n", ret->state);
         }

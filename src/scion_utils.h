@@ -5,6 +5,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// Returns the correct aligned mac, for whatever reason our struct has its mac two bytes off
+// altough the other fields are correct
+static inline __u64* get_fixed_mac(struct scion_hop_field* hop_field) {
+    __u8* steps = (__u8*)(&hop_field->mac);
+    __u64* mac = (__u64*)(steps - 2); // We are 2 byte off, not sure why...
+    return mac;
+}
+
 // Writes the pathmeta header into the 32bit buffer, ignoring extra fields like num_hf etc
 static inline void path_meta_hdr_to_raw(struct scion_path_meta_hdr* path_meta_header, __u32* raw) {
     *raw = ((__u32)path_meta_header->cur_inf) <<30 | ((__u32)(path_meta_header->cur_hf & 0x3F))<<24;
@@ -49,7 +57,8 @@ static inline struct scion_info_field* get_inf_field(void* data, __u8 index) {
 // Gets the hop field at the given index
 static inline struct scion_hop_field* get_hop_field(void* data, __u8 num_inf, __u8 hf_index) {
     // offset: 4𝐵+8𝐵⋅NumINF+12𝐵⋅CurrHF
-    void* new_off = (void*)(((char*)data) + 4 + 8 * num_inf + 12 * hf_index);
+    void* new_off = (char*)(((__u8*)data) + (4 + 8 * num_inf + 12 * hf_index)); // -2
+    printf("calculating from %p tp %p with num_inf %u and hf_index %u\n", data, new_off, num_inf, hf_index);
     return (struct scion_hop_field*)(new_off);
 }
 
