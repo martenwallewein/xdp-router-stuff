@@ -5,6 +5,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// Returns the correct aligned mac, for whatever reason our struct has its mac two bytes off
+// altough the other fields are correct
+static inline __u64* get_fixed_mac(struct scion_hop_field* hop_field) {
+    __u8* steps = (__u8*)(&hop_field->mac);
+    __u64* mac = (__u64*)(steps - 2); // We are 2 byte off, not sure why...
+    return mac;
+}
+
 // Writes the pathmeta header into the 32bit buffer, ignoring extra fields like num_hf etc
 static inline void path_meta_hdr_to_raw(struct scion_path_meta_hdr* path_meta_header, __u32* raw) {
     *raw = ((__u32)path_meta_header->cur_inf) <<30 | ((__u32)(path_meta_header->cur_hf & 0x3F))<<24;

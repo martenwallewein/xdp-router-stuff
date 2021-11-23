@@ -7,7 +7,9 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include "../src/scion_forward.h"
-  
+
+// Enable debug logging for SCION packets
+#define DEBUG 1
 #define PORT      50011// 30001
 #define MAXLINE 1500
 
@@ -72,12 +74,6 @@ int main() {
                 MSG_WAITALL, ( struct sockaddr *) &cliaddr,
                 &len);
         printf("Received %u bytes\n", n);
-                if (n!= 1380) {
-                    continue;
-                }
-
-        // buffer[n] = '\0';
-        // printf("Client : %d\n", n);
         struct scion_forward_result* ret = handle_forward(buffer, &br_info);
         if (ret->state == SCION_FORWARD_SUCCESS) {
             struct sockaddr_in cliaddr;
@@ -89,12 +85,13 @@ int main() {
             print_ip(&targetIp, htonl(ret->dst_addr_v4));
             printf("Sending packet to %s:%u\n", targetIp, ret->dst_port);
             n = sendto(sockfd, (const char *)buffer, n,  MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
-            printf("Sent %d bytes\n", n);
-            
             if (n < 0) {
                 printf("Err sending packet\n");
                 continue;
             }
+            printf("Sent %d bytes\n", n);
+            
+            
         } else {
             printf("Packet not forwarded %u\n", ret->state);
         }

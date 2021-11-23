@@ -4,8 +4,7 @@
 #include "scion.h"
 #include "scion_utils.h"
 
-// Enable debug logging for SCION packets
-#define DEBUG 1
+
 #ifdef DEBUG
 #include "./scion_debug.h"
 #endif
@@ -47,7 +46,7 @@ static inline int update_non_cons_dir_ingress_seg_id(
 	// TODO(lukedirtwalker): For packets destined to peer links this shouldn't
 	// be updated.
     if (cur_inf_field->constr_dir == 0 && be16toh(cur_hop_field->cons_ingr_interface) != 0) {
-        printf("update_non_cons_dir_ingress_seg_id\n");
+        // printf("update_non_cons_dir_ingress_seg_id\n");
         // update segId in info filed
         update_seg_id(cur_inf_field, cur_hop_field->mac);
         return 1;
@@ -67,8 +66,7 @@ static inline int update_cons_dir_egress_seg_id(
 	// be updated.
     if (cur_inf_field->constr_dir != 0) {
         // update segId in info filed
-            __u8* steps = (__u8*)(&cur_hop_field->mac);
-        __u64* mac = (__u64*)(steps - 2); // We are 2 byte off, not sure why...
+        __u64* mac = get_fixed_mac(cur_hop_field);
         update_seg_id(cur_inf_field, *mac);
         return 1;
 
@@ -145,7 +143,7 @@ static inline struct scion_forward_result* handle_forward(void* data, struct sci
     ret = verify_current_mac(cur_inf_field, cur_hop_field, br_info->mac_key, full_mac); // Handle result here...
 
     // TODO: Handle egress/ingress alerts!!
-    printf("DEBUG: dst_isd = %u, localAS: %lu\n\n",scion_v4_h->dst_isd, be64toh(scion_v4_h->dst_ia));
+    // printf("DEBUG: dst_isd = %u, localAS: %lu\n\n",scion_v4_h->dst_isd, be64toh(scion_v4_h->dst_ia));
 
     // Inbound: pkts destined to the local IA.
     // TODO: We need to make sure that its not a svc address...
