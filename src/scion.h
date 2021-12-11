@@ -84,10 +84,13 @@ struct scion_br_info {
     __u32* link_egr_ports;
     __u32* link_ingr_ports;
     __u32 num_links;
+    uint8_t src_mac[ETH_ALEN];
+    uint8_t dst_mac[ETH_ALEN];
+    __u32 src_ip;
+    __u32 dst_ip;
 
 };
 
 #define MIN_PACKET_SIZE 62 // 14 (eth) + 20 (IP) + 8 (UDP) + 12 (SCION) + 8 (UDP)
-#define DISPATCHER_PORT 30041
 
 #endif /* SCION_H */

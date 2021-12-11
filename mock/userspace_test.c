@@ -6,13 +6,13 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include "../src/scion_forward.h"
+
 
 // Enable debug logging for SCION packets
 #define DEBUG 1
 #define PORT      50011// 30001
 #define MAXLINE 1500
-
+#include "../src/scion_forward.h"
 __u32 to_u32_ip(__u8 block1, __u8 block2, __u8 block3, __u8 block4) {
     unsigned char bytes[4];
     __u32 ip = 0;
@@ -74,6 +74,12 @@ int main() {
                 MSG_WAITALL, ( struct sockaddr *) &cliaddr,
                 &len);
         printf("Received %u bytes\n", n);
+        const struct scion_hdr *scion_h = (const struct scion_hdr *)(buffer);
+        const struct scion_addr_hdr_v4 *scion_v4_h = (const struct scion_addr_hdr_v4 *)(scion_h + 1);
+        if(scion_h->next_hdr != IPPROTO_UDP || (scion_h->path_type != 1u) || ((scion_v4_h->dst_host_addr  >> 8) & 0xFF) == 2) {
+            printf("Got not matching SCION packet \n");
+            continue;
+        }
         struct scion_forward_result* ret = handle_forward(buffer, &br_info);
         if (ret->state == SCION_FORWARD_SUCCESS) {
             struct sockaddr_in cliaddr;
@@ -81,9 +87,9 @@ int main() {
             cliaddr.sin_family    = AF_INET; 
             cliaddr.sin_addr.s_addr = htonl(ret->dst_addr_v4);
             cliaddr.sin_port = htons(ret->dst_port);
-            char* targetIp;
-            print_ip(&targetIp, htonl(ret->dst_addr_v4));
-            printf("Sending packet to %s:%u\n", targetIp, ret->dst_port);
+            // char* targetIp;
+            // print_ip(&targetIp, htonl(ret->dst_addr_v4));
+            // printf("Sending packet to %d:%u\n", targetIp, ret->dst_port);
             n = sendto(sockfd, (const char *)buffer, n,  MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
             if (n < 0) {
                 printf("Err sending packet\n");

@@ -2,6 +2,16 @@
 
 #include "af_xdp_user.h"
 
+
+__u32 to_u32_ip(__u8 block1, __u8 block2, __u8 block3, __u8 block4) {
+    __u32 ip = 0;
+    ip |= (((__u32)block1) << 24) & 0xFF000000;
+    ip |= (((__u32)block2) << 16) & 0xFF0000;
+    ip |= (((__u32)block3) << 8) & 0xFF00;
+    ip |= (((__u32)block4)) & 0xFF;
+    return ip;
+}
+
 static inline __u32 xsk_ring_prod__free(struct xsk_ring_prod *r)
 {
 	r->cached_cons = *r->consumer + r->size;
@@ -227,8 +237,18 @@ static inline unsigned short checksum(unsigned short *buf, int bufsz) {
     return ~sum;
 }
 
+void print_ip(char** target, __u32 ip)
+{
+    unsigned char bytes[4];
+    bytes[0] = ip & 0xFF;
+    bytes[1] = (ip >> 8) & 0xFF;
+    bytes[2] = (ip >> 16) & 0xFF;
+    bytes[3] = (ip >> 24) & 0xFF;   
+    asprintf(target, "%d.%d.%d.%d", bytes[3], bytes[2], bytes[1], bytes[0]);        
+}
+
 static bool process_packet(struct xsk_socket_info *xsk,
-			   uint64_t addr, uint32_t len)
+			   uint64_t addr, uint32_t len, struct scion_br_info* br_info, uint32_t tx_idx)
 {
 	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
@@ -241,53 +261,62 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	 *   ICMPV6_ECHO_REPLY
 	 * - Recalculate the icmp checksum */
 
-	int ret;
-	uint32_t tx_idx = 0;
-	uint8_t tmp_mac[ETH_ALEN];
-	struct in_addr tmp_ip;
+	// int ret;
+	// uint32_t tx_idx = 0;
+	// uint8_t tmp_mac[ETH_ALEN];
+	// struct in_addr tmp_ip;
 	struct ethhdr *eth = (struct ethhdr *) pkt;
 	struct iphdr *ip = (struct iphdr *) (eth + 1);
 
-	memcpy(tmp_mac, eth->h_dest, ETH_ALEN);
-	memcpy(eth->h_dest, eth->h_source, ETH_ALEN);
-	memcpy(eth->h_source, tmp_mac, ETH_ALEN);
+	// memcpy(tmp_mac, eth->h_dest, ETH_ALEN);
+	// memcpy(eth->h_dest, eth->h_source, ETH_ALEN);
+	// memcpy(eth->h_source, tmp_mac, ETH_ALEN);
 
-	memcpy(&tmp_ip, &ip->saddr, sizeof(tmp_ip));
-	memcpy(&ip->saddr, &ip->daddr, sizeof(tmp_ip));
-	memcpy(&ip->daddr, &tmp_ip, sizeof(tmp_ip));
+	// memcpy(&tmp_ip, &ip->saddr, sizeof(tmp_ip));
+	// memcpy(&ip->saddr, &ip->daddr, sizeof(tmp_ip));
+	// memcpy(&ip->daddr, &tmp_ip, sizeof(tmp_ip));
+	if (ip->protocol == IPPROTO_UDP) {
+		struct udphdr *udp = (void*)ip + sizeof(*ip);
+		struct scion_forward_result* ret = handle_forward((void*)udp, br_info);
+		 if (ret->state == SCION_FORWARD_SUCCESS) {
+			 // We need to send the packet to the remote here
 
+			// Set our mac and source IP + dst mac and dst IP
+			// TODO: Add this later
+			memcpy(eth->h_dest, br_info->dst_mac, ETH_ALEN);
+			memcpy(eth->h_source, br_info->src_mac, ETH_ALEN);
+			memcpy(&ip->saddr, &br_info->src_ip, sizeof(struct in_addr));
+			memcpy(&ip->daddr, &br_info->dst_ip, sizeof(struct in_addr));
+			udp->dest = htobe16(30041);
+			udp->check = 0;
+			printf("Sending to dest %u\n", udp->dest);
+			char* targetIp;
+            print_ip(&targetIp, be32toh(ip->daddr));
+			char* srcIp;
+            print_ip(&srcIp, be32toh(ip->saddr));
+            printf("Sending packet from %s to %s:%u with len %d\n", srcIp, targetIp, 30041, len);
+			ip->check = 0;
+			ip->check = checksum((unsigned short *)ip, sizeof(struct iphdr));
 
-	/*csum_replace2(&icmp->icmp6_cksum,
-				htons(ICMPV6_ECHO_REQUEST << 8),
-				htons(ICMPV6_ECHO_REPLY << 8));*/
-	ip->check = 0;
-	ip->check = checksum((unsigned short *)ip, sizeof(struct iphdr));
+			xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
+			xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
+			// xsk_ring_prod__submit(&xsk->tx, 1);
+			xsk->outstanding_tx++;
 
-	/* Here we sent the packet out of the receive port. Note that
-		* we allocate one entry and schedule it. Your design would be
-		* faster if you do batch processing/transmission */
+			xsk->stats.tx_bytes += len;
+			xsk->stats.tx_packets++;
 
-	ret = xsk_ring_prod__reserve(&xsk->tx, 1, &tx_idx);
-	if (ret != 1) {
-		/* No more transmit slots, drop the packet */
-		return false;
-	}
-
-	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
-	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
-	xsk_ring_prod__submit(&xsk->tx, 1);
-	xsk->outstanding_tx++;
-
-	xsk->stats.tx_bytes += len;
-	xsk->stats.tx_packets++;
-	return true;
+			return true;
+        } 
 	
+	}
+	return false;
 }
 
-static void handle_receive_packets(struct xsk_socket_info *xsk)
+static void handle_receive_packets(struct xsk_socket_info *xsk, struct scion_br_info* br_info)
 {
 	unsigned int rcvd, stock_frames, i;
-	uint32_t idx_rx = 0, idx_fq = 0;
+	uint32_t idx_rx = 0, idx_fq = 0, idx_tx = 0;
 	int ret;
 
 	rcvd = xsk_ring_cons__peek(&xsk->rx, RX_BATCH_SIZE, &idx_rx);
@@ -314,18 +343,19 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 
 		xsk_ring_prod__submit(&xsk->umem->fq, stock_frames);
 	}
-
+	// TODO: Not sure if this is correct here...
+	ret = xsk_ring_prod__reserve(&xsk->tx, rcvd, &idx_tx);
 	/* Process received packets */
 	for (i = 0; i < rcvd; i++) {
 		uint64_t addr = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx)->addr;
 		uint32_t len = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx++)->len;
 
-		if (!process_packet(xsk, addr, len))
+		if (!process_packet(xsk, addr, len, br_info, idx_tx))
 			xsk_free_umem_frame(xsk, addr);
 
 		xsk->stats.rx_bytes += len;
 	}
-
+	xsk_ring_prod__submit(&xsk->tx, rcvd);
 	xsk_ring_cons__release(&xsk->rx, rcvd);
 	xsk->stats.rx_packets += rcvd;
 
@@ -334,7 +364,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
   }
 
 static void rx_and_process(struct config *cfg,
-			   struct xsk_socket_info *xsk_socket)
+			   struct xsk_socket_info *xsk_socket, struct scion_br_info* br_info)
 {
 	struct pollfd fds[2];
 	int ret, nfds = 1;
@@ -349,7 +379,7 @@ static void rx_and_process(struct config *cfg,
 			if (ret <= 0 || ret > 1)
 				continue;
 		}
-		handle_receive_packets(xsk_socket);
+		handle_receive_packets(xsk_socket, br_info);
 	}
 }
 
@@ -548,8 +578,40 @@ int main_impl(int argc, char **argv)
 		}
 	}
 
+	struct scion_br_info br_info;
+    br_info.num_links = 1;
+    br_info.link_egr_ids = malloc(sizeof(__u16));
+    br_info.link_ingr_ids = malloc(sizeof(__u16));
+    br_info.link_egr_ips = malloc(sizeof(__u32));
+    br_info.link_ingr_ips = malloc(sizeof(__u32));
+    br_info.link_egr_ports = malloc(sizeof(__u16));
+    *(br_info.link_egr_ids) = 0;
+    *(br_info.link_ingr_ids) = 1;
+    *(br_info.link_ingr_ips) = to_u32_ip(192, 168, 178, 73);
+    *(br_info.link_egr_ips) = to_u32_ip(192, 168, 178, 20);
+    *(br_info.link_egr_ports) = 50011;// 8080;
+    br_info.local_isd = 4864;
+    br_info.local_ia = 18422537230224523264u;
+	// br_info.src_mac = malloc(sizeof(__u8) * 6); // 38:f3:ab:70:01:ba
+	br_info.src_mac[0] = 56;
+	br_info.src_mac[1] = 243;
+	br_info.src_mac[2] = 171;
+	br_info.src_mac[3] = 112;
+	br_info.src_mac[4] = 1;
+	br_info.src_mac[5] = 186;
+	// br_info.dst_mac = malloc(sizeof(__u8) * 6); // 94:65:9c:a9:3a:bc
+	br_info.dst_mac[0] = 148;
+	br_info.dst_mac[1] = 101;
+	br_info.dst_mac[2] = 156;
+	br_info.dst_mac[3] = 169;
+	br_info.dst_mac[4] = 58;
+	br_info.dst_mac[5] = 188;
+    br_info.src_ip = htobe32(to_u32_ip(192, 168, 178, 73));
+    br_info.dst_ip = htobe32(to_u32_ip(192, 168, 178, 20));
+
+
 	/* Receive and count packets than drop them */
-	rx_and_process(&cfg, xsk_socket);
+	rx_and_process(&cfg, xsk_socket, &br_info);
 
 	/* Cleanup */
 	xsk_socket__delete(xsk_socket->xsk);

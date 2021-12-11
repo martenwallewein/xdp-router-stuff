@@ -5,9 +5,9 @@
 #include "scion_utils.h"
 
 
-#ifdef DEBUG
-#include "./scion_debug.h"
-#endif
+//#ifdef DEBUG
+// #include "./scion_debug.h"
+//#endif
 
 #define SCION_FORWARD_IGNORE 0
 #define SCION_FORWARD_SUCCESS 1
@@ -126,21 +126,21 @@ static inline struct scion_forward_result* handle_forward(void* data, struct sci
     // Since we want to add other fields for easier processing here
     __u32* path_meta_start = (__u32*)(scion_v4_h + 1);
     struct scion_path_meta_hdr *scion_path_meta = path_meta_hdr_from_raw(be32toh(*path_meta_start));
-    #ifdef DEBUG
-    print_packet_info(scion_h, scion_v4_h, scion_path_meta);
-    #endif
+    //#ifdef DEBUG
+    // print_packet_info(scion_h, scion_v4_h, scion_path_meta);
+    //#endif
 
     // Get current INF/HF
     struct scion_info_field* cur_inf_field = get_inf_field(((void*)path_meta_start), scion_path_meta->cur_inf);
     struct scion_hop_field* cur_hop_field = get_hop_field(((void*)path_meta_start), scion_path_meta->num_inf, scion_path_meta->cur_hf);
-    print_hf(cur_hop_field);
-    int ret = 0;
+    // print_hf(cur_hop_field);
+    // int ret = 0;
 
     // Check if ingress and consDir
-    ret = update_non_cons_dir_ingress_seg_id(cur_inf_field, cur_hop_field);
+    /*ret = */update_non_cons_dir_ingress_seg_id(cur_inf_field, cur_hop_field);
 
     __u64* full_mac = malloc(2 * sizeof(__u64)); // 16 bytes
-    ret = verify_current_mac(cur_inf_field, cur_hop_field, br_info->mac_key, full_mac); // Handle result here...
+    /*ret = */verify_current_mac(cur_inf_field, cur_hop_field, br_info->mac_key, full_mac); // Handle result here...
 
     // TODO: Handle egress/ingress alerts!!
     // printf("DEBUG: dst_isd = %u, localAS: %lu\n\n",scion_v4_h->dst_isd, be64toh(scion_v4_h->dst_ia));
@@ -169,7 +169,7 @@ static inline struct scion_forward_result* handle_forward(void* data, struct sci
 
         // TODO: calculate hop expiry
         // Verify again
-        ret = verify_current_mac(cur_inf_field, cur_hop_field, br_info->mac_key, full_mac);
+        /*ret = */verify_current_mac(cur_inf_field, cur_hop_field, br_info->mac_key, full_mac);
     } 
 
     // Validate egress id, basically we need to lookup egress id here...
@@ -188,17 +188,18 @@ static inline struct scion_forward_result* handle_forward(void* data, struct sci
     //    HF: MAC: 12947491872978829312, Ingress: 1, Egress: 0
     // Funny side note: Ingress of HF #3 is not always the same for the same packet sent multiple times...
     // TODO: Combine these two
-    __u32 egr_int_ip = egr_intf_ip_by_id(br_info, cur_hop_field->cons_egr_interface);
-    __u16 egr_int_port = egr_intf_port_by_id(br_info, cur_hop_field->cons_egr_interface);
+    // TODO: Put this back in for prod usage
+    // __u32 egr_int_ip = egr_intf_ip_by_id(br_info, cur_hop_field->cons_egr_interface);
+    // __u16 egr_int_port = egr_intf_port_by_id(br_info, cur_hop_field->cons_egr_interface);
 
     // We update the segId before updating HF 
-    ret = update_cons_dir_egress_seg_id(cur_inf_field, cur_hop_field);
+    /*ret = */update_cons_dir_egress_seg_id(cur_inf_field, cur_hop_field);
 
     // INF field is not changed here anymore, we did this in xover
     update_cur_inf_hf(scion_path_meta);
     result->state = SCION_FORWARD_SUCCESS;
-    result->dst_port = egr_int_port;
-    result->dst_addr_v4 = egr_int_ip;
+    // result->dst_port = egr_int_port;
+    // result->dst_addr_v4 = egr_int_ip;
 
     // Write path meta back to packet
     __u32 raw = 0;

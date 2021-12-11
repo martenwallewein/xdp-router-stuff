@@ -30,6 +30,9 @@
 #include "common_params.h"
 #include "common_user_bpf_xdp.h"
 #include "common_libbpf.h"
+// #include "scion_debug.h"
+#include "scion_forward.h"
+
 
 
 #define NUM_FRAMES         4096
